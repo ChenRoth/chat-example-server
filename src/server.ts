@@ -21,18 +21,62 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-wss.on('connection', (ws: WebSocket) => {
+function sendJSON(ws: WebSocket, msg: any) {
+    ws.send(JSON.stringify(msg));
+}
 
-    //connection is up, let's add a simple simple event
+wss.on('connection', (ws: WebSocket) => {    
+    const sender = {
+        name: null,
+    };
+
     ws.on('message', (message: string) => {
-
-        //log the received message and send it back to the client
-        console.log('received: %s', message);
-        ws.send(`Hello, you sent -> ${message}`);
+        const action = JSON.parse(message);
+        switch (action.type) {
+            case 'SIGN_IN': {
+                const {name} = action.payload;
+                console.log('sender\'s name is', name);
+                sender.name = name;
+                sendJSON(ws, {type: 'SIGNED_IN', payload: {}});
+                break;
+            }
+            case 'SEND_MSG': {
+                const {text} = action.payload;
+                console.log('sender sent the following text', text);
+                wss.clients.forEach((client) => {
+                    sendJSON(client, {type: 'RECEIVE_MSG', payload: {
+                        timestamp: Date.now(),
+                        text,
+                        sender: sender.name,
+                    }});
+                }); 
+                break;               
+            }
+            case 'START_TYPING': {
+                wss.clients.forEach((client) => {
+                    if (client === ws) {
+                        return;
+                    }
+                    sendJSON(client, {type: 'SOMEONE_IS_TYPING', payload: {
+                        name: sender.name,
+                    }});
+                });            
+                break;    
+            }
+            case 'STOP_TYPING': {
+                wss.clients.forEach((client) => {
+                    if (client === ws) {
+                        return;
+                    }
+                    sendJSON(client, {type: 'SOMEONE_STOPPED_TYPING', payload: {
+                        name: sender.name,
+                    }});
+                });   
+                break;             
+            }
+        }
     });
 
-    //send immediatly a feedback to the incoming connection    
-    ws.send('Hi there, I am a WebSocket server');
 });
 
 server.listen(PORT, () => console.log(`Server is up at ${PORT}`));
