@@ -52,6 +52,7 @@ wss.on('connection', (ws: WebSocket) => {
                 }); 
                 break;               
             }
+            // 
             case 'START_TYPING': {
                 wss.clients.forEach((client) => {
                     if (client === ws) {
